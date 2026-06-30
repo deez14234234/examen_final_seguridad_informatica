@@ -1,0 +1,24 @@
+<!--
+  local_rules_ssh.xml
+  Lab 2 - Tarea 2.1: Regla de correlación - Brute Force SSH
+
+  Esta regla detecta 10 o más fallos de autenticación SSH desde la misma
+  dirección IP en un intervalo de 60 segundos, usando el mecanismo de
+  frequency + timeframe de Wazuh.
+
+  Se basa en la regla base 5760 ("sshd: authentication failed") del
+  ruleset de Wazuh para SSH, agregando correlación por IP de origen.
+  (Nota: en algunas versiones del ruleset el SID equivalente es 5716;
+  se confirmó 5760 como el SID real generado en este entorno mediante
+  prueba con alerts.log antes de fijar el valor final).
+-->
+<group name="local,ssh,">
+
+  <rule id="100050" level="10" frequency="10" timeframe="60">
+    <if_matched_sid>5760</if_matched_sid>
+    <same_source_ip />
+    <description>Ataque de fuerza bruta SSH detectado desde $(srcip)</description>
+    <group>authentication_failures,brute_force,</group>
+  </rule>
+
+</group>

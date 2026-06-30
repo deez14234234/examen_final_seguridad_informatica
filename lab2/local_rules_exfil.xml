@@ -1,0 +1,55 @@
+<!--
+  local_rules_exfil.xml
+  Lab 2 - Tarea 2.2: Regla de correlación - Exfiltración de datos
+
+  LÓGICA DE LA REGLA:
+  La exfiltración de datos rara vez ocurre de forma aislada: típicamente
+  un atacante (o una cuenta comprometida) primero inicia sesión con éxito
+  fuera del horario laboral normal (22:00 - 06:00, cuando hay menor
+  vigilancia humana), y luego transfiere un volumen de datos anormalmente
+  alto hacia afuera de la red en una sola conexión.
+
+  Por eso esta regla se construye en DOS niveles:
+
+    1) Regla 100051: detecta un LOGIN EXITOSO cuya hora cae fuera del
+       horario laboral (22:00-06:00). Se marca con el grupo
+       "login_fuera_horario" para poder referenciarla después.
+
+    2) Regla 100052: detecta una transferencia de datos saliente
+       superior a 500 MB (bytes_sent > 524288000) desde un host interno,
+       PERO solo dispara si en la MISMA fuente (same_source_ip) ya se
+       había disparado la regla 100051 dentro de la ventana de tiempo
+       (frequency=2, timeframe=3600 = 1 hora). Wazuh exige frequency >= 2,
+       por lo que se cuenta como "2 coincidencias": el login fuera de
+       horario (100051) y la transferencia de datos actual. Esto
+       correlaciona ambos eventos: "alguien entró fuera de hora Y ahora
+       está sacando datos".
+
+  Nivel de severidad 14 (crítico) en la regla final, ya que la combinación
+  de ambos factores eleva significativamente la probabilidad de que sea
+  un incidente real de exfiltración y no una transferencia legítima.
+-->
+<group name="local,exfiltration,">
+
+  <!-- Paso 1: login exitoso fuera de horario laboral (22:00 - 06:00) -->
+  <rule id="100051" level="5">
+    <if_sid>5715</if_sid> <!-- sshd: authentication success (regla base de Wazuh) -->
+    <time>22:00 - 06:00</time>
+    <description>Login exitoso fuera de horario laboral desde $(srcip)</description>
+    <group>login_fuera_horario,</group>
+  </rule>
+
+  <!--
+    Paso 2: transferencia saliente > 500 MB correlacionada con el login
+    fuera de horario detectado en la regla 100051, desde la misma IP
+    de origen, dentro de la siguiente hora.
+  -->
+  <rule id="100052" level="14" frequency="2" timeframe="3600">
+    <if_matched_sid>100051</if_matched_sid>
+    <same_source_ip />
+    <field name="bytes_sent" type="osmatch">^[5-9][0-9]{8,}$</field> <!-- > ~524 288 000 bytes (500 MB) -->
+    <description>Posible exfiltración de datos: transferencia saliente mayor a 500MB desde $(srcip) tras login fuera de horario laboral</description>
+    <group>data_exfiltration,critical_alert,</group>
+  </rule>
+
+</group>
