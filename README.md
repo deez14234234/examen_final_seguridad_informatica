@@ -6,6 +6,8 @@
 **Denilson Mamani Flores**
 Ingeniería de Sistemas — Ciclo IX
 
+
+
 </div>
 
 ---
@@ -14,12 +16,13 @@ Ingeniería de Sistemas — Ciclo IX
 
 Este repositorio contiene la evaluación práctica final del curso de **Seguridad Informática**, correspondiente a la Unidad IV. El trabajo integra cuatro laboratorios que cubren el ciclo completo de un flujo de monitoreo de seguridad: análisis forense de logs, correlación de eventos en un SIEM (Wazuh), detección de anomalías con Machine Learning y construcción de un dashboard SOC.
 
-| Laboratorio | Tema | 
+| Laboratorio | Tema |  
 |---|---|---|
-| Lab 1 | Análisis forense de logs con Python | 
-| Lab 2 | Reglas de correlación en Wazuh |
-| Lab 3 | Detección de anomalías con Isolation Forest | 
-| Lab 4 | Dashboard de monitoreo SOC |
+| Lab 1 | Análisis forense de logs con Python |  
+| Lab 2 | Reglas de correlación en Wazuh | 
+| Lab 3 | Detección de anomalías con Isolation Forest |  
+| Lab 4 | Dashboard de monitoreo SOC |  
+
 
 ---
 
@@ -113,6 +116,56 @@ python lab1/visualizar.py
 
 - **`visualizar.py`** generó las tres gráficas requeridas en `lab1/graficas/`: ranking Top 10 de IPs SSH, línea de tiempo de peticiones HTTP y heatmap de código de respuesta por hora.
 
+**Código clave — `analizar_ssh.py`** (conteo de intentos fallidos y alerta de fuerza bruta):
+
+```python
+pattern_ip = re.compile(r"from (\d+\.\d+\.\d+\.\d+)")
+ip_counts = defaultdict(int)
+
+with open("auth.log", "r") as file:
+    for line in file:
+        if "Failed password" in line:
+            match = pattern_ip.search(line)
+            if match:
+                ip_counts[match.group(1)] += 1
+
+for ip, count in sorted(ip_counts.items(), key=lambda x: x[1], reverse=True):
+    if count > 50:
+        print(f"[ALERTA] IP: {ip} — {count} intentos fallidos — Posible ataque de fuerza bruta")
+```
+
+**Código clave — `analizar_web.py`** (parseo Apache Combined Log Format y detección de SQLi):
+
+```python
+LOG_REGEX = re.compile(
+    r'(?P<ip>\S+) \S+ \S+ \[(?P<fecha>[^\]]+)\] '
+    r'"(?P<metodo>\S+) (?P<ruta>\S+) (?P<protocolo>[^"]+)" '
+    r'(?P<codigo>\d{3}) (?P<bytes>\S+) "(?P<referer>[^"]*)" "(?P<user_agent>[^"]*)"'
+)
+
+SQLI_REGEX = re.compile("|".join([r"UNION", r"SELECT", r"--", r"OR\s+1=1", r"'"]), re.IGNORECASE)
+
+def detectar_sqli(registros):
+    hallazgos = []
+    for r in registros:
+        if SQLI_REGEX.search(r["ruta"]):
+            hallazgos.append({
+                "ip": r["ip"], "ruta": r["ruta"],
+                "patrones": list(set(SQLI_REGEX.findall(r["ruta"]))),
+            })
+    return hallazgos
+```
+
+**Código clave — `visualizar.py`** (gráfico de barras Top 10 SSH):
+
+```python
+plt.figure(figsize=(10, 6))
+colores = ["#d62728" if item.get("alerta") else "#1f77b4" for item in top10]
+plt.bar(ips, intentos, color=colores)
+plt.title("Top 10 IPs con más intentos fallidos SSH")
+plt.savefig("graficas/top10_ssh.png", dpi=150)
+```
+
 ---
 
 ## Lab 2 — Reglas de correlación en Wazuh
@@ -161,7 +214,48 @@ Notebook: `lab3/deteccion_anomalias.ipynb`, sobre el dataset `network_traffic.cs
 6. Identificación del Top 10 de registros más anómalos.
 7. Exportación del modelo final a `modelo_anomalias.pkl`.
 
-**Predicción sobre tráfico nuevo:**
+**Código clave — entrenamiento del modelo:**
+
+```python
+from sklearn.ensemble import IsolationForest
+
+modelo = IsolationForest(contamination=0.05, n_estimators=100, random_state=42)
+modelo.fit(X_scaled)
+
+df['prediccion'] = modelo.predict(X_scaled)        # -1 = anomalía, 1 = normal
+df['anomaly_score'] = modelo.decision_function(X_scaled)
+```
+
+**Código clave — búsqueda del umbral óptimo (curva Umbral vs F1):**
+
+```python
+umbrales = np.linspace(df['anomaly_score'].min(), df['anomaly_score'].max(), 100)
+f1_scores = []
+
+for u in umbrales:
+    pred_u = np.where(df['anomaly_score'] < u, -1, 1)
+    f1_scores.append(f1_score(y_real, pred_u, pos_label=-1, zero_division=0))
+
+mejor_idx = np.argmax(f1_scores)
+mejor_umbral = umbrales[mejor_idx]     # -0.0405
+mejor_f1 = f1_scores[mejor_idx]        # 0.5950
+```
+
+**Predicción sobre tráfico nuevo — `predecir.py`:**
+
+```python
+modelo = joblib.load("modelo_anomalias.pkl")
+scaler = joblib.load("scaler.pkl")
+
+df_feat['ratio_bytes'] = df_feat['bytes_sent'] / (df_feat['bytes_recv'] + 1)
+df_feat['bytes_por_segundo'] = (df_feat['bytes_sent'] + df_feat['bytes_recv']) / (df_feat['duration_sec'] + 0.01)
+
+X_nuevo = scaler.transform(df_feat[features_completas])
+df_feat['prediccion'] = modelo.predict(X_nuevo)
+df_feat['anomaly_score'] = modelo.decision_function(X_nuevo)
+
+anomalias = df_feat[df_feat['prediccion'] == -1].sort_values('anomaly_score')
+```
 
 ```bash
 python lab3/predecir.py lab3/nuevo_trafico.csv
