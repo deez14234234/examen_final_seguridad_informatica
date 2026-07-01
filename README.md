@@ -6,7 +6,10 @@
 **Denilson Mamani Flores**
 Ingeniería de Sistemas — Ciclo IX
 
-
+[![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Wazuh](https://img.shields.io/badge/Wazuh-4.x-1E96D8?logo=wazuh&logoColor=white)](https://wazuh.com/)
+[![Jupyter](https://img.shields.io/badge/Jupyter-Notebook-F37626?logo=jupyter&logoColor=white)](https://jupyter.org/)
+[![scikit-learn](https://img.shields.io/badge/scikit--learn-Isolation%20Forest-F7931E?logo=scikitlearn&logoColor=white)](https://scikit-learn.org/)
 
 </div>
 
@@ -16,13 +19,13 @@ Ingeniería de Sistemas — Ciclo IX
 
 Este repositorio contiene la evaluación práctica final del curso de **Seguridad Informática**, correspondiente a la Unidad IV. El trabajo integra cuatro laboratorios que cubren el ciclo completo de un flujo de monitoreo de seguridad: análisis forense de logs, correlación de eventos en un SIEM (Wazuh), detección de anomalías con Machine Learning y construcción de un dashboard SOC.
 
-| Laboratorio | Tema |  
+| Laboratorio | Tema | Puntaje |
 |---|---|---|
-| Lab 1 | Análisis forense de logs con Python |  
-| Lab 2 | Reglas de correlación en Wazuh | 
-| Lab 3 | Detección de anomalías con Isolation Forest |  
-| Lab 4 | Dashboard de monitoreo SOC |  
-
+| Lab 1 | Análisis forense de logs con Python | 5 pts |
+| Lab 2 | Reglas de correlación en Wazuh | 4 pts |
+| Lab 3 | Detección de anomalías con Isolation Forest | 6 pts |
+| Lab 4 | Dashboard de monitoreo SOC | 5 pts |
+| **Total** | | **20 pts** |
 
 ---
 
@@ -114,6 +117,30 @@ python lab1/visualizar.py
 
 - **`analizar_web.py`** procesó `access.log` (1000 peticiones) y detectó **8 posibles intentos de SQL Injection**. No se identificaron patrones de escaneo de directorios en el rango analizado. Las IPs con más errores 4xx/5xx fueron `45.33.32.156`, `193.32.162.55` y `89.210.135.99`.
 
+  Ejecución real:
+
+  ```
+  Total de líneas parseadas correctamente: 1000
+
+  === ESCANEO DE DIRECTORIOS DETECTADO ===
+  No se detectaron patrones de escaneo de directorios.
+
+  === TOP IPs CON ERRORES 4xx/5xx ===
+  45.33.32.156 -> 47 errores {'404': 34, '403': 10, '500': 3}
+  193.32.162.55 -> 18 errores {'500': 14, '400': 4}
+  89.210.135.99 -> 18 errores {'404': 10, '500': 8}
+  ...
+
+  === INTENTOS DE SQL INJECTION DETECTADOS ===
+  [ALERTA] IP: 193.32.162.55 — Ruta: /login?user=admin'--&pass=x — Patrones: ["--", "'"]
+  [ALERTA] IP: 193.32.162.55 — Ruta: /search?q=' — Patrones: ["'"]
+  ...
+
+  Reporte exportado a reporte_web.json
+  ```
+
+  Los 8 intentos de SQLi provinieron todos de la misma IP (`193.32.162.55`), alternando entre rutas de login y búsqueda.
+
 - **`visualizar.py`** generó las tres gráficas requeridas en `lab1/graficas/`: ranking Top 10 de IPs SSH, línea de tiempo de peticiones HTTP y heatmap de código de respuesta por hora.
 
 **Código clave — `analizar_ssh.py`** (conteo de intentos fallidos y alerta de fuerza bruta):
@@ -182,13 +209,40 @@ Dos reglas locales personalizadas, agregadas a `/var/ossec/etc/rules/` en la VM 
 Validación y prueba:
 
 ```bash
-xmllint --noout lab2/local_rules_ssh.xml && echo OK
-xmllint --noout lab2/local_rules_exfil.xml && echo OK
+sudo xmllint --noout /var/ossec/etc/rules/local_rules_ssh.xml && echo "local_rules_ssh.xml: OK"
+sudo xmllint --noout /var/ossec/etc/rules/local_rules_exfil.xml && echo "local_rules_exfil.xml: OK"
+# local_rules_ssh.xml: OK
+# local_rules_exfil.xml: OK
 
 sudo systemctl restart wazuh-manager
-sudo ./simular_bruteforce.sh
-sudo tail -f /var/ossec/logs/alerts/alerts.log
+sudo systemctl status wazuh-manager --no-pager
+# ● wazuh-manager.service - Wazuh manager
+#    Active: active (running)
 ```
+
+**Simulación real del ataque de fuerza bruta**, ejecutada contra la propia VM Wazuh (`127.0.0.1`, usuario inexistente, 15 intentos):
+
+```bash
+sudo apt install sshpass -y
+chmod +x simular_bruteforce.sh
+./simular_bruteforce.sh 127.0.0.1 usuario_falso 15
+```
+
+Alerta real capturada en `/var/ossec/logs/alerts/alerts.log` en cuanto se superaron los 10 fallos en 60s:
+
+```
+** Alert 1782850744.109089: - pam,syslog,authentication_failed,...
+Rule: 5503 (level 5) -> 'PAM: User login failed.'
+Src IP: 127.0.0.1
+
+** Alert 1782850746.109585: - syslog,sshd,authentication_failed,...
+Rule: 5710 (level 5) -> 'sshd: Attempt to login using a non-existent user'
+Failed password for invalid user usuario_falso from 127.0.0.1 port 46204 ssh2
+
+Rule: 100050 (level 10) -> 'Ataque de fuerza bruta SSH detectado desde 127.0.0.1'
+```
+
+La regla `100050` disparó correctamente, confirmando la correlación por IP de origen (`same_source_ip`) dentro de la ventana de 60 segundos.
 
 ---
 
@@ -261,11 +315,28 @@ anomalias = df_feat[df_feat['prediccion'] == -1].sort_values('anomaly_score')
 python lab3/predecir.py lab3/nuevo_trafico.csv
 ```
 
+**Ejecución real** (sobre una muestra de 50 registros tomada de `network_traffic.csv`):
+
+```
+Total de registros analizados: 50
+Anomalías detectadas: 4
+
+=== REGISTROS CLASIFICADOS COMO ANOMALÍA ===
+[ANOMALÍA] score=-0.2908 | src_ip=10.0.0.141 | dst_ip=185.220.101.45 | dst_port=80  | protocol=TCP | bytes_sent=2323584650 | bytes_recv=37555
+[ANOMALÍA] score=-0.2899 | src_ip=10.0.3.75  | dst_ip=108.185.19.69 | dst_port=443 | protocol=TCP | bytes_sent=3886337699 | bytes_recv=23311
+[ANOMALÍA] score=-0.0694 | src_ip=10.0.3.254 | dst_ip=10.0.1.54    | dst_port=8443| protocol=TCP | bytes_sent=221152    | bytes_recv=4665453
+[ANOMALÍA] score=-0.0114 | src_ip=10.0.0.93  | dst_ip=91.240.118.172 | dst_port=8080| protocol=TCP | bytes_sent=4361   | bytes_recv=2479219
+```
+
+Los registros con mayor score negativo corresponden a transferencias salientes muy por encima del promedio (`bytes_sent` en el orden de GB), consistentes con un escenario de exfiltración de datos.
+
 ---
 
 ## Lab 4 — Dashboard de monitoreo SOC
 
 **Herramienta elegida:** Wazuh Dashboard (OpenSearch Dashboards), disponible directamente tras la instalación All-in-One de Wazuh en `192.168.56.103` — sin necesidad de instalar una herramienta adicional.
+
+Acceso: `https://192.168.56.103` → índice `wazuh-alerts-*`.
 
 Se construyó el dashboard **"SOC - Monitor de Seguridad"** con las 4 visualizaciones solicitadas sobre el índice `wazuh-alerts-*`:
 
@@ -275,6 +346,18 @@ Se construyó el dashboard **"SOC - Monitor de Seguridad"** con las 4 visualizac
 | V2 | Tabla de datos | Top 10 IPs con más alertas | `data.srcip` |
 | V3 | Línea | Alertas por hora | `@timestamp` (intervalo 1h) |
 | V4 | Circular (Pie) | Distribución por tipo de regla | `rule.groups` |
+
+**Evidencia real de las visualizaciones:**
+
+- **Discover** — búsqueda por `rule.id: 100050` sobre las últimas 24h arrojó **427 hits**, confirmando que la regla de fuerza bruta SSH viene disparando de forma consistente.
+- **V1** (Vertical Bar, bucket `rule.level`, orden por Count, tamaño 20) muestra la distribución real de alertas por nivel de severidad.
+- **V2** (Data Table, término `data.srcip`, tamaño 10) — Top IPs con más alertas registradas:
+
+  | IP | Alertas |
+  |---|---|
+  | `127.0.0.1` | 105 |
+  | `192.168.56.1` | 9 |
+  | `192.168.56.101` | 9 |
 
 El dashboard incluye rango de tiempo global de últimas 24 horas, panel de texto con el nombre del autor, y una alerta de umbral configurada para disparar cuando las alertas con `rule.level >= 10` superan 5 eventos en 5 minutos.
 
