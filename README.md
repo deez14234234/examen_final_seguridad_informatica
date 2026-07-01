@@ -1,252 +1,225 @@
-Examen Práctico Final — Seguridad Informática
-Estudiante: David Robert Yucra Mamani
-Repositorio: examen-practico-yucra-mamani
-Curso: Seguridad Informática
-Unidad IV: Monitoreo de Seguridad, SIEM e Inteligencia Artificial
-Modalidad elegida: AWS Education / AWS Educate por recursos limitados en PC local.
+<div align="center">
 
-1. Justificación de uso de AWS
-Se eligió AWS porque la evaluación requiere herramientas que consumen recursos elevados, especialmente Wazuh, dashboards y Jupyter. Mi equipo personal no cuenta con capacidad suficiente para ejecutar cómodamente todos los servicios solicitados.
+# Examen Práctico Final — Seguridad Informática
+### Unidad IV: Monitoreo de Seguridad, SIEM e Inteligencia Artificial
 
-Especificaciones de mi equipo personal:
+**Denilson Mamani Flores**
+Ingeniería de Sistemas — Ciclo IX
 
-Procesador: colocar aquí tu CPU
-RAM: colocar aquí tu RAM
-Disco disponible: colocar aquí tu espacio libre
-Motivo: recursos insuficientes para ejecutar Wazuh / dashboard / ML de forma local.
-2. Entorno AWS utilizado
-Completar con tus datos reales de AWS:
+</div>
 
-Recurso	Valor
-Región	us-east-1
-AMI	Ubuntu Server 22.04 LTS
-Instancia Lab 1 y Lab 3	t3.micro / t3.small / t3.medium
-Instancia Lab 2 y Lab 4	t3.medium mínimo, recomendado t3.large si Wazuh se queda sin memoria
-ID instancia Python	i-xxxxxxxxxxxxxxxxx
-ID instancia Wazuh	i-xxxxxxxxxxxxxxxxx
-IP pública Python	x.x.x.x
-IP pública Wazuh	x.x.x.x
-3. Puertos sugeridos en Security Group
-Por seguridad, en SSH usa My IP, no 0.0.0.0/0, salvo que el docente lo pida para revisión temporal.
+---
 
-Puerto	Servicio	Origen recomendado
-22	SSH	My IP
-443	Wazuh Dashboard / OpenSearch Dashboards	My IP
-5601	Kibana/OpenSearch si aplica	My IP
-3000	Grafana si se usa Grafana	My IP
-80	HTTP opcional	My IP
-4. Preparación general del repositorio
-mkdir examen-practico-yucra
-cd examen-practico-yucra
-git init
-Si usas este paquete base, copia todos los archivos dentro de tu carpeta y luego ejecuta:
+## Descripción general
 
-git add .
-git commit -m "estructura inicial del examen practico"
-Conecta tu repositorio remoto:
+Este repositorio contiene la evaluación práctica final del curso de **Seguridad Informática**, correspondiente a la Unidad IV. El trabajo integra cuatro laboratorios que cubren el ciclo completo de un flujo de monitoreo de seguridad: análisis forense de logs, correlación de eventos en un SIEM (Wazuh), detección de anomalías con Machine Learning y construcción de un dashboard SOC.
 
-git branch -M main
-git remote add origin https://github.com/TU_USUARIO/examen-practico-yucra.git
-git push -u origin main
-5. Instalación de Python y librerías
-chmod +x scripts/setup_python.sh
-./scripts/setup_python.sh
-source .venv/bin/activate
-Verificar:
+| Laboratorio | Tema | 
+|---|---|---|
+| Lab 1 | Análisis forense de logs con Python | 
+| Lab 2 | Reglas de correlación en Wazuh |
+| Lab 3 | Detección de anomalías con Isolation Forest | 
+| Lab 4 | Dashboard de monitoreo SOC |
 
-python --version
-pip freeze
-6. Descargar datos del repositorio del docente
-chmod +x scripts/descargar_datos.sh
-./scripts/descargar_datos.sh
-Archivos descargados:
+---
 
-lab1/auth.log
-lab1/access.log
-lab2/simular_bruteforce.sh
-lab3/network_traffic.csv
-Laboratorio 1 — Análisis Forense de Logs con Python
-1.1 Análisis de SSH
+## Entorno de trabajo
+
+El examen se desarrolló íntegramente en un entorno **local con VirtualBox**, usando dos máquinas virtuales Ubuntu Server conectadas en red host-only, en lugar de AWS.
+
+| Rol | IP | Usado en | Descripción |
+|---|---|---|---|
+| VM Endpoint / Python | `192.168.56.101` | Lab 1 y Lab 3 | Análisis de logs, scripts Python y Jupyter Notebook |
+| VM Wazuh | `192.168.56.103` | Lab 2 y Lab 4 | Wazuh Manager, Indexer, Dashboard y reglas de correlación |
+
+Acceso por SSH:
+
+```bash
+ssh denis@192.168.56.101   # VM endpoint (Lab 1 / Lab 3)
+ssh denis@192.168.56.103   # VM Wazuh (Lab 2 / Lab 4)
+```
+
+**Herramientas instaladas:**
+
+- Ubuntu Server 22.04 LTS (x2 VMs, VirtualBox host-only network)
+- Python 3.11+ con entorno virtual (`.venv`) — ver `requirements.txt`
+- Wazuh (Manager, Indexer y Dashboard — instalación All-in-One)
+- Jupyter Notebook
+- pandas, scikit-learn, matplotlib, seaborn, joblib
+
+---
+
+## Estructura del repositorio
+
+```
+examen_final_seguridad_informatica/
+├── README.md
+├── requirements.txt
+├── lab1/
+│   ├── analizar_ssh.py
+│   ├── analizar_web.py
+│   ├── visualizar.py
+│   ├── auth.log
+│   ├── access.log
+│   ├── reporte_ssh.json
+│   ├── reporte_web.json
+│   ├── graficas/
+│   │   ├── top10_ssh.png
+│   │   ├── timeline_http.png
+│   │   └── heatmap_http.png
+│   └── evidencias/
+├── lab2/
+│   ├── local_rules_ssh.xml
+│   ├── local_rules_exfil.xml
+│   └── evidencias/
+├── lab3/
+│   ├── deteccion_anomalias.ipynb
+│   ├── predecir.py
+│   ├── network_traffic.csv
+│   ├── nuevo_trafico.csv
+│   ├── modelo_anomalias.pkl
+│   ├── scaler.pkl
+│   └── evidencias/
+└── lab4/
+    ├── dashboard_soc.json
+    ├── dashboard_soc.ndjson
+    └── evidencias/
+```
+
+---
+
+## Lab 1 — Análisis forense de logs con Python
+
+Dos scripts procesan los logs de autenticación SSH y de acceso Apache, y un tercero genera las visualizaciones.
+
+```bash
 source .venv/bin/activate
 python lab1/analizar_ssh.py
-cat lab1/reporte_ssh.json
-Evidencias requeridas:
-
-lab1/evidencias/SCR-1.1a_ssh_ejecucion.png: terminal ejecutando el script y alertas visibles.
-lab1/evidencias/SCR-1.1b_ssh_json.png: contenido de reporte_ssh.json.
-1.2 Análisis Web Apache
 python lab1/analizar_web.py
-cat lab1/reporte_web.json
-Evidencias requeridas:
-
-lab1/evidencias/SCR-1.2a_web_ejecucion.png: ejecución con detecciones de escaneo y SQLi.
-lab1/evidencias/SCR-1.2b_web_json.png: contenido de reporte_web.json.
-1.3 Visualizaciones
 python lab1/visualizar.py
-ls -lh lab1/graficas/
-Archivos generados:
+```
 
-lab1/graficas/top10_ssh.png
-lab1/graficas/timeline_http.png
-lab1/graficas/heatmap_http.png
-Commit recomendado:
+**Resultados obtenidos:**
 
-git add lab1 README.md
-git commit -m "lab1 analisis forense de logs y graficas"
-git push
-Laboratorio 2 — Reglas de Correlación en Wazuh
-2.1 Instalar Wazuh All-in-One en EC2
-En la instancia de Wazuh:
+- **`analizar_ssh.py`** procesó `auth.log` y detectó **253 intentos fallidos** de autenticación en total. Se generaron alertas de fuerza bruta para las IPs con mayor actividad:
 
-chmod +x scripts/instalar_wazuh_all_in_one.sh
-./scripts/instalar_wazuh_all_in_one.sh
-Al finalizar, guarda el usuario/contraseña que muestra el instalador.
+  | IP | Intentos fallidos | Alerta |
+  |---|---|---|
+  | `45.33.32.156` | 120 | ✔ Fuerza bruta |
+  | `193.32.162.55` | 58 | ✔ Fuerza bruta |
+  | `91.240.118.172` | 30 | — |
 
-Verificar servicios:
+- **`analizar_web.py`** procesó `access.log` (1000 peticiones) y detectó **8 posibles intentos de SQL Injection**. No se identificaron patrones de escaneo de directorios en el rango analizado. Las IPs con más errores 4xx/5xx fueron `45.33.32.156`, `193.32.162.55` y `89.210.135.99`.
 
-sudo systemctl status wazuh-manager --no-pager
-sudo systemctl status wazuh-indexer --no-pager
-sudo systemctl status wazuh-dashboard --no-pager
-Evidencia:
+- **`visualizar.py`** generó las tres gráficas requeridas en `lab1/graficas/`: ranking Top 10 de IPs SSH, línea de tiempo de peticiones HTTP y heatmap de código de respuesta por hora.
 
-lab2/evidencias/SCR-2.1_wazuh_activo.png
-2.2 Aplicar reglas locales
-chmod +x scripts/aplicar_reglas_wazuh.sh
-./scripts/aplicar_reglas_wazuh.sh
-Validación XML manual:
+---
 
+## Lab 2 — Reglas de correlación en Wazuh
+
+Dos reglas locales personalizadas, agregadas a `/var/ossec/etc/rules/` en la VM Wazuh (`192.168.56.103`).
+
+**`local_rules_ssh.xml`** — Regla `100050`: detecta 10 o más fallos de autenticación SSH desde la misma IP en 60 segundos (basada en el SID base `5760`, confirmado en este entorno mediante prueba directa contra `alerts.log`). Nivel de severidad 10.
+
+**`local_rules_exfil.xml`** — Regla compuesta de dos niveles:
+
+1. `100051`: detecta un login SSH exitoso fuera del horario laboral (22:00–06:00).
+2. `100052`: se dispara solo si, dentro de la hora siguiente y desde la misma IP, se detecta una transferencia saliente mayor a 500 MB — correlacionando ambos eventos. Nivel de severidad 14 (crítico).
+
+Validación y prueba:
+
+```bash
 xmllint --noout lab2/local_rules_ssh.xml && echo OK
 xmllint --noout lab2/local_rules_exfil.xml && echo OK
-Evidencia:
 
-lab2/evidencias/SCR-2.2_reglas_validadas.png
-2.3 Simular fuerza bruta y revisar alerta
-chmod +x lab2/simular_bruteforce.sh
-sudo ./lab2/simular_bruteforce.sh
+sudo systemctl restart wazuh-manager
+sudo ./simular_bruteforce.sh
 sudo tail -f /var/ossec/logs/alerts/alerts.log
-También puedes buscar la regla:
+```
 
-sudo grep -n "100001\|fuerza bruta\|brute" /var/ossec/logs/alerts/alerts.log | tail -20
-Evidencia:
+---
 
-lab2/evidencias/SCR-2.3_alerta_disparada.png
-Commit recomendado:
+## Lab 3 — Detección de anomalías con Machine Learning
 
-git add lab2 scripts README.md
-git commit -m "lab2 reglas wazuh y evidencia de correlacion"
-git push
-Laboratorio 3 — Modelo de Detección de Anomalías con ML
-3.1 Abrir Jupyter
-source .venv/bin/activate
-jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser
-Abre la URL con token en tu navegador. En AWS, asegúrate de abrir temporalmente el puerto 8888 solo para tu IP, o usa túnel SSH:
+Notebook: `lab3/deteccion_anomalias.ipynb`, sobre el dataset `network_traffic.csv` (10,000 registros de tráfico de red).
 
-ssh -i TU_LLAVE.pem -L 8888:localhost:8888 ubuntu@IP_PUBLICA_EC2
-Luego abre:
+**Pipeline:**
 
-http://localhost:8888
-Ejecuta todas las celdas de:
+1. Análisis exploratorio, tratamiento de valores atípicos y creación de variables derivadas (`ratio_bytes`, `bytes_por_segundo`).
+2. Normalización con `StandardScaler` (persistido en `scaler.pkl`).
+3. Entrenamiento de un modelo **Isolation Forest** (`contamination=0.05`, `n_estimators=100`, `random_state=42`).
+4. Evaluación contra la columna `label`:
 
-lab3/deteccion_anomalias.ipynb
-El notebook genera:
+   | Métrica | Valor |
+   |---|---|
+   | Precision (anomaly) | 0.57 |
+   | Recall (anomaly) | 0.57 |
+   | F1-Score (anomaly) | 0.57 |
+   | Accuracy global | 0.96 |
 
-EDA y histogramas.
-Modelo Isolation Forest.
-Métricas: Precision, Recall, F1-Score y matriz de confusión.
-Curva umbral vs F1.
-Top 10 anomalías.
-lab3/modelo_anomalias.pkl.
-Evidencias:
+5. Búsqueda de umbral óptimo sobre `decision_function`: **umbral = -0.0405**, con **F1 = 0.595**.
+6. Identificación del Top 10 de registros más anómalos.
+7. Exportación del modelo final a `modelo_anomalias.pkl`.
 
-lab3/evidencias/SCR-3.1_eda.png
-lab3/evidencias/SCR-3.2_metricas.png
-lab3/evidencias/SCR-3.3_umbral_f1.png
-3.4 Probar script de predicción
+**Predicción sobre tráfico nuevo:**
+
+```bash
 python lab3/predecir.py lab3/nuevo_trafico.csv
-Evidencia:
+```
 
-lab3/evidencias/SCR-3.4_predecir.png
-Commit recomendado:
+---
 
-git add lab3 README.md requirements.txt
-git commit -m "lab3 modelo isolation forest para deteccion de anomalias"
-git push
-Laboratorio 4 — Dashboard de Monitoreo SOC
-Herramienta elegida
-Se elige OpenSearch Dashboards / Wazuh Dashboard, porque al instalar Wazuh All-in-One ya queda disponible un dashboard web y los índices wazuh-alerts-*, evitando instalar otra herramienta adicional en una PC con pocos recursos.
+## Lab 4 — Dashboard de monitoreo SOC
 
-URL típica:
+**Herramienta elegida:** Wazuh Dashboard (OpenSearch Dashboards), disponible directamente tras la instalación All-in-One de Wazuh en `192.168.56.103` — sin necesidad de instalar una herramienta adicional.
 
-https://IP_PUBLICA_EC2
-4.1 Fuente de datos
-En Wazuh Dashboard / OpenSearch Dashboards:
+Se construyó el dashboard **"SOC - Monitor de Seguridad"** con las 4 visualizaciones solicitadas sobre el índice `wazuh-alerts-*`:
 
-Inicia sesión.
-Verifica que existan eventos en wazuh-alerts-*.
-Explora eventos de las últimas 24 horas.
-Exporta 20 registros representativos a CSV si la interfaz lo permite; si no, puedes documentar la búsqueda y guardar captura.
-Evidencia:
+| Código | Tipo | Métrica | Agrupación |
+|---|---|---|---|
+| V1 | Barras verticales | Count de alertas | `rule.level` |
+| V2 | Tabla de datos | Top 10 IPs con más alertas | `data.srcip` |
+| V3 | Línea | Alertas por hora | `@timestamp` (intervalo 1h) |
+| V4 | Circular (Pie) | Distribución por tipo de regla | `rule.groups` |
 
-lab4/evidencias/SCR-4.1_fuente_datos.png
-4.2 Visualizaciones requeridas
-Crear estas 4 visualizaciones:
+El dashboard incluye rango de tiempo global de últimas 24 horas, panel de texto con el nombre del autor, y una alerta de umbral configurada para disparar cuando las alertas con `rule.level >= 10` superan 5 eventos en 5 minutos.
 
-Código	Tipo	Métrica	Agrupación
-V1	Vertical Bar	Count de alertas	rule.level
-V2	Data Table	Top 10 IPs con más alertas	data.srcip
-V3	Line	Alertas por hora	@timestamp, intervalo 1h
-V4	Pie Chart	Distribución por tipo de regla	rule.groups
-Evidencia:
+Export del dashboard incluido en `lab4/dashboard_soc.json` y `lab4/dashboard_soc.ndjson`.
 
-lab4/evidencias/SCR-4.2_visualizaciones.png
-4.3 Dashboard integrado
-Nombre exacto:
+---
 
-SOC - Monitor de Seguridad
-Debe incluir:
+## Evidencias
 
-Las 4 visualizaciones.
-Rango global: últimas 24 horas.
-Panel de texto con autor: David Robert Yucra Mamani.
-Export JSON: reemplaza lab4/dashboard_soc.json por el export real de la herramienta.
-Evidencia:
+Cada laboratorio incluye su carpeta `evidencias/` con las capturas de pantalla requeridas por la rúbrica (ejecución de scripts, reportes JSON, servicios activos, reglas validadas, alertas disparadas, notebook ejecutado y visualizaciones del dashboard).
 
-lab4/evidencias/SCR-4.3_dashboard.png
-4.4 Alerta de umbral
-Condición equivalente:
+---
 
-Alertas con rule.level >= 10 superan 5 eventos en 5 minutos
-Evidencia:
+## Cómo reproducir el proyecto
 
-lab4/evidencias/SCR-4.4_alerta.png
-Commit recomendado:
+```bash
+git clone https://github.com/deez14234234/examen_final_seguridad_informatica.git
+cd examen_final_seguridad_informatica
 
-git add lab4 README.md
-git commit -m "lab4 dashboard soc y alerta de umbral"
-git push
-Checklist final antes de entregar
-git status
-find . -maxdepth 3 -type f | sort
-Verifica que existan:
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 
-README.md
-lab1/analizar_ssh.py
-lab1/analizar_web.py
-lab1/visualizar.py
-lab1/reporte_ssh.json
-lab1/reporte_web.json
-lab1/graficas/top10_ssh.png
-lab1/graficas/timeline_http.png
-lab1/graficas/heatmap_http.png
-lab2/local_rules_ssh.xml
-lab2/local_rules_exfil.xml
-lab3/deteccion_anomalias.ipynb
-lab3/predecir.py
-lab3/modelo_anomalias.pkl
-lab4/dashboard_soc.json exportado desde la herramienta
-Capturas en carpetas evidencias/
-Último push:
+# Lab 1
+python lab1/analizar_ssh.py
+python lab1/analizar_web.py
+python lab1/visualizar.py
 
-git add .
-git commit -m "entrega final examen practico seguridad informatica"
-git push
+# Lab 3
+jupyter notebook lab3/deteccion_anomalias.ipynb
+python lab3/predecir.py lab3/nuevo_trafico.csv
+```
+
+Para Lab 2 y Lab 4 se requiere una instancia de Wazuh (Manager + Indexer + Dashboard) activa; las reglas de `lab2/` deben copiarse a `/var/ossec/etc/rules/` y el dashboard de `lab4/` puede importarse desde la interfaz de Wazuh Dashboard.
+
+---
+
+<div align="center">
+
+**Denilson Mamani Flores** · Seguridad Informática · Unidad IV
+
+</div>
