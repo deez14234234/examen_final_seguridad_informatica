@@ -19,13 +19,12 @@ Ingeniería de Sistemas — Ciclo IX
 
 Este repositorio contiene la evaluación práctica final del curso de **Seguridad Informática**, correspondiente a la Unidad IV. El trabajo integra cuatro laboratorios que cubren el ciclo completo de un flujo de monitoreo de seguridad: análisis forense de logs, correlación de eventos en un SIEM (Wazuh), detección de anomalías con Machine Learning y construcción de un dashboard SOC.
 
-| Laboratorio | Tema | Puntaje |
-|---|---|---|
-| Lab 1 | Análisis forense de logs con Python | 5 pts |
-| Lab 2 | Reglas de correlación en Wazuh | 4 pts |
-| Lab 3 | Detección de anomalías con Isolation Forest | 6 pts |
-| Lab 4 | Dashboard de monitoreo SOC | 5 pts |
-| **Total** | | **20 pts** |
+| Laboratorio | Tema |
+|---|---|
+| Lab 1 | Análisis forense de logs con Python |
+| Lab 2 | Reglas de correlación en Wazuh |
+| Lab 3 | Detección de anomalías con Isolation Forest |
+| Lab 4 | Dashboard de monitoreo SOC |
 
 ---
 
